@@ -15,6 +15,58 @@
 #include <tinyxml2.h>
 
 #include "General/Game.h"
+#include "Rendering\AssimpLoader.h"
+
+
+std::vector<std::string> ListDirectoryContents(const char *sDir)
+{
+	WIN32_FIND_DATA fdFile;
+	HANDLE hFind = NULL;
+
+	char sPath[2048];
+	std::vector<std::string> paths;
+
+	//Specify a file mask. *.* = We want everything!
+	sprintf(sPath, "%s\\*.*", sDir);
+
+	if ((hFind = FindFirstFile(sPath, &fdFile)) == INVALID_HANDLE_VALUE)
+	{
+		printf("Path not found: [%s]\n", sDir);
+		return paths;
+	}
+
+	do
+	{
+		//Find first file will always return "."
+		//    and ".." as the first two directories.
+		if (strcmp(fdFile.cFileName, ".") != 0
+			&& strcmp(fdFile.cFileName, "..") != 0)
+		{
+			//Build up our file path using the passed in
+			//  [sDir] and the file/foldername we just found:
+			sprintf(sPath, "%s\\%s", sDir, fdFile.cFileName);
+
+			//Is the entity a File or Folder?
+			if (fdFile.dwFileAttributes &FILE_ATTRIBUTE_DIRECTORY)
+			{
+				printf("Directory: %s\n", sPath);
+				paths.push_back(sPath);
+				std::vector<std::string> temp = ListDirectoryContents(sPath);//Recursion, I love it!
+				paths.insert(paths.end(), temp.begin(), temp.end()); 
+
+			}
+			else {
+				printf("File: %s\n", sPath);
+				paths.push_back(sPath);
+
+			}
+		}
+	} while (FindNextFile(hFind, &fdFile)); //Find the next file.
+
+	FindClose(hFind); //Always, Always, clean things up!
+
+	return paths;
+}
 
 std::vector<std::string> filesNames(std::string folder)
 {
@@ -26,7 +78,7 @@ std::vector<std::string> filesNames(std::string folder)
 		do {
 			// read all (real) files in current folder
 			// , delete '!' read other 2 default folder . and ..
-			if (!(find.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+			if (find.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 				fileNames.push_back(find.cFileName);
 			}
 		} while (::FindNextFile(hFind, &find));
@@ -61,7 +113,7 @@ int main(int, char**)
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 	
-	WindowManager::getInstance().createWindow("Level Editor Test", 0, 0, 1920, 1080);
+	WindowManager::getInstance().createWindow("Level Editor", 0, 0, 1920, 1080);
 	GLFWwindow* window = WindowManager::getInstance().getWindow();
     glfwMakeContextCurrent(window);
     glewInit();
@@ -81,7 +133,7 @@ int main(int, char**)
     //io.Fonts->AddFontFromFileTTF("../../extra_fonts/ProggyTiny.ttf", 10.0f);
     //io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesJapanese());
 
-    bool show_test_window = true;
+    bool show_test_window = false;
     bool AssetsWindow = false;
 	bool ModelWindow = true;
 	bool ScriptWindow = true;
@@ -93,15 +145,28 @@ int main(int, char**)
 	//script component
 	std::vector<bool> scriptComponentToggle(100);
 	scriptComponentToggle[0] = false;
+	//models in scene
+	std::vector<bool> ModelToggle(150);
+	ModelToggle[0] = false;
 
 	//script
-	std::vector<std::string> fileNameBackup = filesNames("./Script/"); // back up of the names stored
+	std::vector<std::string> fileNameBackup = ListDirectoryContents("./Script"); // back up of the names stored
 	std::vector<const char *> comboStrings; // names of script
 	comboStrings.push_back("Temp");
 	//xml
-	std::vector<std::string> XMLNameBackup = filesNames("./XML/"); // back up of the xml stored
+	std::vector<std::string> XMLNameBackup = ListDirectoryContents("./XML"); // back up of the xml stored
 	std::vector<const char *> XMLcomboStrings; // names of xml
 	XMLcomboStrings.push_back("XMLTemp");
+
+	//model
+	std::vector<std::string> ModelsNameBackup = ListDirectoryContents("./Models"); // back up of the models stored
+	std::vector<const char *> ModelscomboStrings; // names of model	
+	ModelscomboStrings.push_back("ModelTemp");
+	//texture
+	std::vector<std::string> TexturesNameBackup = ListDirectoryContents("./Textures"); // back up of the texture stored
+	std::vector<const char *> TexturescomboStrings; // names of texture
+
+	ResourceManager::getInstance()->LoadShader("./Shaders/texture_shader.vert", "./Shaders/texture_shader.frag", "default");
 
 	WindowManager::getInstance().getSceneManager()->LoadScene(_Scene);
 	Renderer * renderer =  new Renderer(WindowManager::getInstance().getWindow());
@@ -109,6 +174,117 @@ int main(int, char**)
 
 	WindowManager::getInstance().getSceneManager()->switchScene();
 	WindowManager::getInstance().getSceneManager()->UpdateRenderers(renderer, gRenderer);
+	_Scene = WindowManager::getInstance().getSceneManager()->getCurrentScene();
+
+
+	DirectionalLight * dirLight = new DirectionalLight("default", glm::vec3(-0.2f, -1.0f, -0.3f), glm::vec3(0.05f, 0.05f, 0.1f), glm::vec3(0.2f, 0.2f, 0.7f), glm::vec3(0.7f, 0.7f, 0.7f));
+
+	renderer->getLightManager().RegisterDirectionalLight(dirLight);
+
+	GameObject object("model");
+	int index = _Scene->AddGameObject(object);
+	TransformComponent * tc = _Scene->getGameObjects()->at(index).GetComponentByType<TransformComponent>();
+	tc->setParent(&_Scene->getGameObjects()->at(index));
+	//tc->setPosition(glm::vec3(0.0f, 0.0f, 0.0f));
+	//tc->setRotation(glm::vec3(-3.142 / 2.0f, 0.0f, 0.0f));
+	//tc->setScale(glm::vec3(2.0f, 2.0f, 2.0f));
+
+	RenderComponent * render = new RenderComponent(&_Scene->getGameObjects()->at(index), "default");
+
+	AssimpLoader loader;
+
+	Model model = loader.LoadModel("./Models/nanosuit/nanosuit.obj");
+	render->AttachModel(model);
+	_Scene->getGameObjects()->at(index).registerComponent(render);
+	render->setParent(&_Scene->getGameObjects()->at(index));
+
+	ResourceManager::getInstance()->useShader("default");
+
+	glm::vec3 pointLightPositions[] = 
+	{
+		glm::vec3(0.7f,  0.2f,  2.0f),
+		glm::vec3(2.3f, -3.3f, -4.0f),
+		glm::vec3(-4.0f,  2.0f, -12.0f),
+		glm::vec3(0.0f,  0.0f, -3.0f)
+	};
+
+	glm::vec3 pointLightColors[] = 
+	{
+
+		glm::vec3(0.7f, 0.7f, 0.7f),
+		glm::vec3(0.7f, 0.7f, 0.7f),
+		glm::vec3(0.7f, 0.7f, 0.7f),
+		glm::vec3(0.7f, 0.7f, 0.7f)
+	};
+
+
+	for (int i = 0; i < 4; i++) 
+	{
+		ShaderUniform position;
+		position.M_Address = "pointLights[" + to_string(i) + "].position";
+		position.M_Type = ShaderType::VEC3;
+		position.M_Vec3 = glm::vec3(pointLightPositions[i].x, pointLightPositions[i].y, pointLightPositions[i].z);
+
+		ShaderUniform ambient;
+		ambient.M_Address = "pointLights[" + to_string(i) + "].ambient";
+		ambient.M_Type = ShaderType::VEC3;
+		ambient.M_Vec3 = glm::vec3(pointLightColors[i].x * 0.1, pointLightColors[i].y * 0.1, pointLightColors[i].z * 0.1);
+
+		ShaderUniform diffuse;
+		diffuse.M_Address = "pointLights[" + to_string(i) + "].diffuse";
+		diffuse.M_Type = ShaderType::VEC3;
+		diffuse.M_Vec3 = glm::vec3(pointLightColors[i].x, pointLightColors[i].y, pointLightColors[i].z);
+
+		ShaderUniform specular;
+		specular.M_Address = "pointLights[" + to_string(i) + "].specular";
+		specular.M_Type = ShaderType::VEC3;
+		specular.M_Vec3 = glm::vec3(pointLightColors[i].x, pointLightColors[i].y, pointLightColors[i].z);
+
+		ShaderUniform constant;
+		constant.M_Address = "pointLights[" + to_string(i) + "].constant";
+		constant.M_Type = ShaderType::FLOAT;
+		constant.M_Float = 1.0f; 
+
+		ShaderUniform linear;
+		linear.M_Address = "pointLights[" + to_string(i) + "].linear";
+		linear.M_Type = ShaderType::FLOAT;
+		linear.M_Float = 0.09f;
+
+		ShaderUniform quadratic;
+		quadratic.M_Address = "pointLights[" + to_string(i) + "].quadratic";
+		quadratic.M_Type = ShaderType::FLOAT;
+		quadratic.M_Float = 0.032f;
+
+		PointLight * pointLight = new PointLight("default", glm::vec3(pointLightPositions[i].x, pointLightPositions[i].y, pointLightPositions[i].z), glm::vec3(pointLightColors[i].x * 0.1, pointLightColors[i].y * 0.1, pointLightColors[i].z * 0.1), glm::vec3(pointLightColors[i].x, pointLightColors[i].y, pointLightColors[i].z), glm::vec3(pointLightColors[i].x, pointLightColors[i].y, pointLightColors[i].z), 1.0f, 0.09f, 0.032f);
+
+
+		renderer->getLightManager().RegisterPointLight(pointLight);
+
+	}
+
+	if (WindowManager::getInstance().getSceneManager()->getCurrentScene() != nullptr)
+		WindowManager::getInstance().getSceneManager()->getCurrentScene()->Start();
+
+	//Model
+	static float vec3mPos[3] = {0.0f, 0.0f, 0.0f };
+	static float vec3mRot[3] = { 0.0f, 0.0f, 0.0f };
+	static float vec3mSize[3] = { 1.0f, 1.0f, 1.0f };
+	//Camera
+	static float vec3cPos[3] = { 0.0f, 0.0f, 0.0f };
+	static float vec3cRot[3] = { 0.0f, 0.0f, 0.0f };
+	//Directional Light
+	static float vec3DLPos[3] = { -0.2f, -1.0f, -0.3f };
+	static float vec3DLA[3] = { 0.05f, 0.05f, 0.1f };
+	static float vec3DLD[3] = { 0.2f, 0.2f, 0.7f };
+	static float vec3DLS[3] = { 0.7f, 0.7f, 0.7f };
+	//Point Lights
+	static float vec3PointPos[3] = { -0.2f, -1.0f, -0.3f };
+	static float vec3PointA[3] = { 0.05f, 0.05f, 0.1f };
+	static float vec3PointD[3] = { 0.2f, 0.2f, 0.7f };
+	static float vec3PointS[3] = { 0.7f, 0.7f, 0.7f };
+	static float Constant = 0.0f;
+	static float Linear = 0.0f;
+	static float Quadratic = 0.0f;
 
 
 	// Main loop
@@ -120,9 +296,13 @@ while (!glfwWindowShouldClose(window))
 	int display_w, display_h;
 	glfwGetFramebufferSize(window, &display_w, &display_h);
 	glViewport(0, 0, display_w, display_h);
-	glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
-	glClear(GL_COLOR_BUFFER_BIT);
+	/*glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
+	glClear(GL_COLOR_BUFFER_BIT);*/
 
+
+
+	_Scene->Update(0);
+	renderer->update(0);
 	renderer->Render();
 
 	// 1. Show a simple window
@@ -141,24 +321,50 @@ while (!glfwWindowShouldClose(window))
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 	}
 
-	// 2. Show another simple window, this time using an explicit Begin/End pair
+	// assets
 	if (AssetsWindow)
 	{
 		ImGui::SetNextWindowSize(ImVec2(200, 100), ImGuiSetCond_FirstUseEver);
 		ImGui::Begin("Assets", &AssetsWindow);
 		ImGui::Text("Hello");
+		// list of models
+
+		static int item = -1;
+		//remove_duplicates
+			if (ModelsNameBackup.size() > 0)
+			{
+				ModelscomboStrings.clear();
+				remove_duplicates(ModelsNameBackup);
+				for (int i = 0; i < ModelsNameBackup.size(); i++)
+				{
+					ModelscomboStrings.push_back(const_cast<char *>(ModelsNameBackup[i].c_str()));
+					//scriptComponentToggle.resize(comboStrings.size() * 2);
+					if (ModelscomboStrings.capacity() > ModelToggle.capacity())
+					{
+						ModelToggle.resize(ModelscomboStrings.capacity());
+					}
+				}
+			}
+			const char** cItem = &ModelscomboStrings[0];
+
 		if (ImGui::TreeNode("Models"))
 		{
-			const char* listbox_items[] = { "Model1", "Model2", "Model3", "Model4", "Model5", "Model6", "Model7", "Model8", "Model9" };
-			static int listbox_item_current = 1;
-			ImGui::ListBox("Models", &listbox_item_current, listbox_items, IM_ARRAYSIZE(listbox_items), 10);
+			ImGui::Combo("Model List", &item, cItem, ModelscomboStrings.size());
 			ImGui::TreePop();
 		}
-		if (ImGui::TreeNode("Textures"))
+		//list of models in scene
+		if (ImGui::TreeNode("Models in scene"))
 		{
-			const char* listbox_items[] = { "Texture1", "Texture2", "Texture3", "Texture4", "Texture5", "Texture6", "Texture7", "Texture8", "Texture9" };
-			static int listbox_item_current = 1;
-			ImGui::ListBox("Textures", &listbox_item_current, listbox_items, IM_ARRAYSIZE(listbox_items), 10);
+			ImGui::Columns(3, NULL, false);
+			for (int i = 0; i < ModelscomboStrings.size(); i++)
+			{
+				if (ImGui::Selectable(ModelscomboStrings[i], ModelToggle[i]))
+				{
+					ModelToggle[i] = !ModelToggle[i];
+				}
+				ImGui::NextColumn();
+			}
+			ImGui::Columns(1);
 			ImGui::TreePop();
 		}
 		ImGui::End();
@@ -220,15 +426,24 @@ while (!glfwWindowShouldClose(window))
 		ImGui::InputTextMultiline("##source", text, IM_ARRAYSIZE(text), ImVec2(-1.0f, ImGui::GetTextLineHeight() * 50), ImGuiInputTextFlags_AllowTabInput | (read_only ? ImGuiInputTextFlags_ReadOnly : 0));
 		if (ImGui::Button("Load Script"))
 		{
-			LoadFile.open("./Script/" + std::string(comboStrings[item]));
-			if (LoadFile.is_open())
-			{
 				for (int i = 0; i < 1024 * 32; i++)
 				{
-					LoadFile >> std::noskipws >> text[i];
+					text[i] = 0; // clear
 				}
-			}
-			LoadFile.close();
+
+					std::string scriptPath = std::string(comboStrings[item]);
+					if (!strstr(scriptPath.c_str(), "./Script")) {
+						scriptPath = "./Script/" + scriptPath;
+					}
+					LoadFile.open(scriptPath);
+					if (LoadFile.is_open())
+					{
+						for (int i = 0; i < 1024 * 32; i++)
+						{
+							LoadFile >> std::noskipws >> text[i];
+						}
+					}
+					LoadFile.close();
 		};
 		if (ImGui::Button("Save Script"))
 		{
@@ -253,13 +468,6 @@ while (!glfwWindowShouldClose(window))
 		static int item = -1;
 
 		static float V = 0.0f;
-		//model
-		static float vec3mPos[3] = { 0.0f, 0.0f, 0.0f };
-		static float vec3mRot[3] = { 0.0f, 0.0f, 0.0f };
-		static float vec3mSize[3] = { 1.0f, 1.0f, 1.0f };
-		//camera
-		static float vec3cPos[3] = { 0.0f, 0.0f, 0.0f };
-		static float vec3cRot[3] = { 0.0f, 0.0f, 0.0f };
 
 		static bool Show = true;
 		//transform is alway true unless changed
@@ -292,6 +500,10 @@ while (!glfwWindowShouldClose(window))
 			}
 			if (ImGui::TreeNode("Load XML"))
 			{
+				for (int i = 0; i < 1024 * 32; i++)
+				{
+					XMLsize[i] = 0; // clear
+				}
 				ImGui::Combo("XML List", &item, cItem, XMLcomboStrings.size());
 				if (ImGui::Button("Load XML"))
 				{
@@ -330,7 +542,7 @@ while (!glfwWindowShouldClose(window))
 		if (ImGui::TreeNode("Add Component"))
 		{
 			ImGui::Columns(3, NULL, false);
-			std::string Components[] = { "Transform", "Camera", "Audio", "Light", "templateComponents1", "templateComponents2", "templateComponents3", "templateComponents4", "templateComponents5" };
+			std::string Components[] = { "Transform", "Camera", "Audio", "Directional Light", "Point Lights", "templateComponents2", "templateComponents3", "templateComponents4", "templateComponents5" };
 			for (int i = 0; i < 9; i++)
 			{
 				if (ImGui::Selectable(Components[i].c_str(), componentToggle[i]))
@@ -347,8 +559,11 @@ while (!glfwWindowShouldClose(window))
 			if (ImGui::TreeNode("Transform"))
 			{
 				ImGui::InputFloat3("Position", vec3mPos);
+				tc->setPosition(glm::vec3(vec3mPos[0], vec3mPos[1], vec3mPos[2]));
 				ImGui::InputFloat3("Rotation", vec3mRot);
+				tc->setRotation(glm::vec3(vec3mRot[0], vec3mRot[1], vec3mRot[2]));
 				ImGui::InputFloat3("Scale", vec3mSize);
+				tc->setScale(glm::vec3(vec3mSize[0], vec3mSize[1], vec3mSize[2]));
 				ImGui::TreePop();
 			}
 		}
@@ -366,6 +581,31 @@ while (!glfwWindowShouldClose(window))
 			if (ImGui::TreeNode("Audio"))
 			{
 				ImGui::VSliderFloat("Volume", ImVec2(50, 400), &V, 0.0f, 100.0f, "%.0f");
+				ImGui::TreePop();
+			}
+		}
+		if (componentToggle[3] == true)
+		{
+			if (ImGui::TreeNode("Directional Light"))
+			{
+				ImGui::InputFloat3("Direction", vec3DLPos);
+				ImGui::InputFloat3("Ambient", vec3DLA);
+				ImGui::InputFloat3("Diffuse", vec3DLD);
+				ImGui::InputFloat3("Specular", vec3DLS);
+				ImGui::TreePop();
+			}
+		}
+		if (componentToggle[4] == true)
+		{
+			if (ImGui::TreeNode("Point Lights"))
+			{
+				ImGui::InputFloat3("Direction", vec3PointPos);
+				ImGui::InputFloat3("Ambient", vec3PointA);
+				ImGui::InputFloat3("Diffuse", vec3PointD);
+				ImGui::InputFloat3("Specular", vec3PointS);
+				//ImGui::SliderFloat("Constant", Constant);
+				//ImGui::SliderFloat("Linear", Linear);
+				//ImGui::SliderFloat("Quadratic", Quadratic);
 				ImGui::TreePop();
 			}
 		}
