@@ -87,7 +87,7 @@
       <SDLCheck>false</SDLCheck>
       <AdditionalIncludeDirectories>$(SolutionDir)\Lib\Dev\include;$(SolutionDir)\Lib\assimp\include;$(SolutionDir)\Lib\SOIL\include\;$(SolutionDir)\Lib\tinyxml\;$(SolutionDir)\Dev\include;$(SolutionDir)\Lib\glm;$(SolutionDir)\Lib\glew\include;$(SolutionDir)\Lib\GLFW\glfw-3.2.1.bin.WIN64\include;$(SolutionDir)\Lib\fmod\inc;$(SolutionDir)\Lib\Lua\include;$(SolutionDir)\Lib\LuaBridge\</AdditionalIncludeDirectories>
       <PreprocessToFile>false</PreprocessToFile>
-      <PreprocessorDefinitions>NDEBUG;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_HAS_ITERATOR_DEBUGGING=0;_ITERATOR_DEBUG_LEVEL=0;NDEBUG;_MBCS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>

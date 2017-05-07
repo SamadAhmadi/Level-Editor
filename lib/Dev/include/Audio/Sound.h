@@ -22,7 +22,7 @@ public:
 	/// </summary>
 	/// <param name="path">The path to the audio file.</param>
 	/// <param name="make3D">Used to determine whether or not the sound should be 3D.</param>
-	Sound(const char* path, bool make3D);
+	Sound(std::string path, bool make3D);
 
 	/// <summary>
 	/// Finalizes an instance of the <see cref="Sound"/> class.
@@ -42,6 +42,14 @@ public:
 	///   <c>true</c> if this instance is looped; otherwise, <c>false</c>.
 	/// </returns>
 	bool isLooped() const;
+	
+	/// <summary>
+	/// Determines whether this instance is playing.
+	/// </summary>
+	/// <returns>
+	///   <c>true</c> if this instance is playing; otherwise, <c>false</c>.
+	/// </returns>
+	bool isPlaying() const;
 
 	/// <summary>
 	/// Determines whether this instance is paused.
@@ -55,13 +63,13 @@ public:
 	/// Returns the path to the audio file.
 	/// </summary>
 	/// <returns>std::string</returns>
-	const char * getPath() const;
+	std::string getPath() const;
 
 	/// <summary>
 	/// Loops the audio.
 	/// </summary>
 	/// <param name="loop"><c>true</c> to loop the audio; otherwise, <c>false</c>.</param>
-	void loop(const bool loop);
+	void loop(bool loop);
 
 	/// <summary>
 	/// Pauses the audio.
@@ -82,7 +90,7 @@ public:
 	/// Sets the volume.
 	/// </summary>
 	/// <param name="volume">The volume level.</param>
-	void setVolume(const float volume);
+	void setVolume(float volume);
 
 	/// <summary>
 	/// Returns the volume level.
@@ -105,11 +113,12 @@ public:
 
 		getGlobalNamespace(L)
 			.deriveClass<Sound, Component>("Sound")
-			.addConstructor<void(*)(const char* path, bool make3D)>()
+			.addConstructor<void(*)(std::string, bool)>()
 			.addProperty("threeD", &Sound::is3D)
 			.addProperty("path", &Sound::getPath)
 			.addProperty("loop", &Sound::isLooped, &Sound::loop)
 			.addProperty("volume", &Sound::getVolume, &Sound::setVolume)
+			.addProperty("playing", &Sound::isPlaying)
 			.addFunction("pause", &Sound::pause)
 			.addFunction("play", &Sound::play)
 			.addFunction("playLoop", &Sound::playLoop)
@@ -134,7 +143,7 @@ private:
 	/// <summary>
 	/// Holds an instance of the AudioEngine.
 	/// </summary>
-	std::shared_ptr<AudioEngine> m_AudioEngine;
+	AudioEngine *m_AudioEngine;
 
 	/// <summary>
 	/// Marks whether the sound is looping.
@@ -154,5 +163,5 @@ private:
 	/// <summary>
 	/// The path to the audio file.
 	/// </summary>
-	const char * m_path;
+	std::string m_path;
 };

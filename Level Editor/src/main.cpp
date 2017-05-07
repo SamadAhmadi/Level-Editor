@@ -16,6 +16,7 @@
 
 #include "General/Game.h"
 #include "Rendering\AssimpLoader.h"
+//#include "Rendering/Components/Lights/SpotLight.h"
 
 
 std::vector<std::string> ListDirectoryContents(const char *sDir)
@@ -118,6 +119,9 @@ int main(int, char**)
     glfwMakeContextCurrent(window);
     glewInit();
 
+	std::map<std::string, int> objectTracking;
+
+
     // Setup ImGui binding
     ImGui_ImplGlfwGL3_Init(window, true);
 
@@ -134,8 +138,8 @@ int main(int, char**)
     //io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\ArialUni.ttf", 18.0f, NULL, io.Fonts->GetGlyphRangesJapanese());
 
     bool show_test_window = false;
-    bool AssetsWindow = false;
-	bool ModelWindow = true;
+    bool AssetsWindow = true;
+	bool GameObjectWindow = true;
 	bool ScriptWindow = true;
 
 	ImVec4 clear_color = ImColor(92, 8, 135);
@@ -166,7 +170,9 @@ int main(int, char**)
 	std::vector<std::string> TexturesNameBackup = ListDirectoryContents("./Textures"); // back up of the texture stored
 	std::vector<const char *> TexturescomboStrings; // names of texture
 
+	ResourceManager::getInstance()->LoadShader("./Shaders/skybox_shader.vert", "./Shaders/skybox_shader.frag", "skybox");
 	ResourceManager::getInstance()->LoadShader("./Shaders/texture_shader.vert", "./Shaders/texture_shader.frag", "default");
+	ResourceManager::getInstance()->LoadShader("./Shaders/post_process_fbo.vert", "./Shaders/post_process_fbo.frag", "post_process_fbo");
 
 	WindowManager::getInstance().getSceneManager()->LoadScene(_Scene);
 	Renderer * renderer =  new Renderer(WindowManager::getInstance().getWindow());
@@ -177,12 +183,13 @@ int main(int, char**)
 	_Scene = WindowManager::getInstance().getSceneManager()->getCurrentScene();
 
 
-	DirectionalLight * dirLight = new DirectionalLight("default", glm::vec3(-0.2f, -1.0f, -0.3f), glm::vec3(0.05f, 0.05f, 0.1f), glm::vec3(0.2f, 0.2f, 0.7f), glm::vec3(0.7f, 0.7f, 0.7f));
+	DirectionalLight * dirLight = new DirectionalLight("default", glm::vec3(-0.2f, -1.0f, -0.3f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 1.0f), glm::vec3(1.0f, 1.0f, 1.0f));
 
 	renderer->getLightManager().RegisterDirectionalLight(dirLight);
 
 	GameObject object("model");
 	int index = _Scene->AddGameObject(object);
+	objectTracking["model"] = index;
 	TransformComponent * tc = _Scene->getGameObjects()->at(index).GetComponentByType<TransformComponent>();
 	tc->setParent(&_Scene->getGameObjects()->at(index));
 	//tc->setPosition(glm::vec3(0.0f, 0.0f, 0.0f));
@@ -216,6 +223,16 @@ int main(int, char**)
 		glm::vec3(0.7f, 0.7f, 0.7f)
 	};
 
+	std::vector<const GLchar*> faces;
+
+	faces.push_back("Textures/World/fire-storm_rt.png");
+	faces.push_back("Textures/World/fire-storm_lf.png");
+	faces.push_back("Textures/World/fire-storm_up.png");
+	faces.push_back("Textures/World/fire-storm_dn.png");
+	faces.push_back("Textures/World/fire-storm_bk.png");
+	faces.push_back("Textures/World/fire-storm_ft.png");
+
+	_Scene->getEnvironment()->setSkyBox(new SkyBox("skybox", faces));
 
 	for (int i = 0; i < 4; i++) 
 	{
@@ -241,17 +258,17 @@ int main(int, char**)
 
 		ShaderUniform constant;
 		constant.M_Address = "pointLights[" + to_string(i) + "].constant";
-		constant.M_Type = ShaderType::FLOAT;
+		constant.M_Type = ShaderType::UNIFORM_FLOAT;
 		constant.M_Float = 1.0f; 
 
 		ShaderUniform linear;
 		linear.M_Address = "pointLights[" + to_string(i) + "].linear";
-		linear.M_Type = ShaderType::FLOAT;
+		linear.M_Type = ShaderType::UNIFORM_FLOAT;
 		linear.M_Float = 0.09f;
 
 		ShaderUniform quadratic;
 		quadratic.M_Address = "pointLights[" + to_string(i) + "].quadratic";
-		quadratic.M_Type = ShaderType::FLOAT;
+		quadratic.M_Type = ShaderType::UNIFORM_FLOAT;
 		quadratic.M_Float = 0.032f;
 
 		PointLight * pointLight = new PointLight("default", glm::vec3(pointLightPositions[i].x, pointLightPositions[i].y, pointLightPositions[i].z), glm::vec3(pointLightColors[i].x * 0.1, pointLightColors[i].y * 0.1, pointLightColors[i].z * 0.1), glm::vec3(pointLightColors[i].x, pointLightColors[i].y, pointLightColors[i].z), glm::vec3(pointLightColors[i].x, pointLightColors[i].y, pointLightColors[i].z), 1.0f, 0.09f, 0.032f);
@@ -260,6 +277,15 @@ int main(int, char**)
 		renderer->getLightManager().RegisterPointLight(pointLight);
 
 	}
+	ShaderUniform camera;
+	camera.M_Address = "viewPos";
+	camera.M_Type = ShaderType::VEC3;
+	camera.M_Vec3 = glm::vec3(40.0f, 40.0f, 40.0f);
+
+	//ResourceManager::getInstance()->useShader("default");
+
+	ResourceManager::getInstance()->GetShader("default")->SetUniform(camera);
+
 
 	if (WindowManager::getInstance().getSceneManager()->getCurrentScene() != nullptr)
 		WindowManager::getInstance().getSceneManager()->getCurrentScene()->Start();
@@ -286,6 +312,7 @@ int main(int, char**)
 	static float Quadratic = 0.0f;
 
 
+
 	// Main loop
 while (!glfwWindowShouldClose(window))
 {
@@ -295,13 +322,15 @@ while (!glfwWindowShouldClose(window))
 	int display_w, display_h;
 	glfwGetFramebufferSize(window, &display_w, &display_h);
 	glViewport(0, 0, display_w, display_h);
-	/*glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
-	glClear(GL_COLOR_BUFFER_BIT);*/
+	glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
+	glClear(GL_COLOR_BUFFER_BIT);
 
+	ResourceManager::getInstance()->GetShader("default")->UpdateSingleUniform(camera);
 
 
 	_Scene->Update(0);
 	renderer->update(0);
+	_Scene->togglePostProcess(false);
 	renderer->Render();
 
 	// 1. Show a simple window
@@ -315,7 +344,7 @@ while (!glfwWindowShouldClose(window))
 		ImGui::ColorEdit3("clear color", (float*)&clear_color);
 		if (ImGui::Button("Window1")) show_test_window ^= 1;
 		if (ImGui::Button("Assets")) AssetsWindow ^= 1;
-		if (ImGui::Button("Model")) ModelWindow ^= 1;
+		if (ImGui::Button("Model")) GameObjectWindow ^= 1;
 		if (ImGui::Button("Script")) ScriptWindow ^= 1;
 		ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / ImGui::GetIO().Framerate, ImGui::GetIO().Framerate);
 	}
@@ -325,7 +354,7 @@ while (!glfwWindowShouldClose(window))
 	{
 		ImGui::SetNextWindowSize(ImVec2(200, 100), ImGuiSetCond_FirstUseEver);
 		ImGui::Begin("Assets", &AssetsWindow);
-		ImGui::Text("Hello");
+		//ImGui::Text("Hello");
 		// list of models
 
 		static int item = -1;
@@ -352,6 +381,7 @@ while (!glfwWindowShouldClose(window))
 			if (ImGui::Button("Load Model"))
 			{
 				Model model = loader.LoadModel("");
+				//GameObjectWindow = true;
 			};
 			ImGui::TreePop();
 		}
@@ -460,23 +490,49 @@ while (!glfwWindowShouldClose(window))
 		ImGui::End();
 	}
 	// right side menu system
-	if (ModelWindow)
+	if (GameObjectWindow)
 	{
+		
+
+
+
 		//xml
 		std::ofstream SaveXML;
 		std::ifstream LoadXML;
 		static char XMLsize[1024 * 32]; // text box
 		static char title[128]; // title
 		const char** cItem = &XMLcomboStrings[0];
-		static int item = -1;
+		static int item = 0;
 
 		static float V = 0.0f;
 
 		static bool Show = true;
+
+		bool hasObject = false;
 		//transform is alway true unless changed
 
 		ImGui::SetNextWindowSize(ImVec2(500, 200), ImGuiSetCond_FirstUseEver);
-		ImGui::Begin("Window", &ModelWindow);
+		ImGui::Begin("Window", &GameObjectWindow);
+
+		std::vector<const char *> objects;
+		objects.clear();
+		for (int i = 0; i < _Scene->getGameObjects()->size(); i++) {
+			objects.push_back(_Scene->getGameObjects()->at(i).m_Name_);
+		}
+		const char** gItem = &objects[0];
+		static int index = 0;
+
+		if (ImGui::TreeNode("Game Objects"))
+		{
+
+			ImGui::Combo("Objects", &index, gItem, objects.size());
+			std::cout << index << std::endl;
+			ImGui::TreePop();
+		}
+
+		if (index > -1) {
+			hasObject = true;
+		}
 
 		//remove_duplicates
 		if (XMLNameBackup.size() > 0) {
@@ -486,6 +542,9 @@ while (!glfwWindowShouldClose(window))
 				XMLcomboStrings.push_back(const_cast<char *>(XMLNameBackup[i].c_str()));
 			}
 		}
+
+		int sceneIndex = objectTracking[objects[index]];
+
 
 		//Options
 		if (ImGui::TreeNode("Options"))
@@ -539,13 +598,50 @@ while (!glfwWindowShouldClose(window))
 		}
 
 		ImGui::Text(" ");
-		ImGui::Text("Player Model");
+		ImGui::Text("Object");
+
+		/*for (int i = 0; i < 9; i++)
+		{
+			componentToggle[i] = false;
+		}
+
+		for (int i = 0; i < _Scene->getGameObjects()->at(sceneIndex).getComponents().size(); i++) {
+				if (_Scene->getGameObjects()->at(sceneIndex).getComponents().at(i)->m_ComponentName == "TRANSFORM_COMPONENT") {
+					componentToggle[0] = true;
+				}
+				if (_Scene->getGameObjects()->at(sceneIndex).getComponents().at(i)->m_ComponentName == "RENDER_COMPONENT") {
+					componentToggle[1] = true;
+				}
+				if (_Scene->getGameObjects()->at(sceneIndex).getComponents().at(i)->m_ComponentName == "FIRST_PERSON_CAMERA") {
+					componentToggle[2] = true;
+				}
+				if (_Scene->getGameObjects()->at(sceneIndex).getComponents().at(i)->m_ComponentName == "SOUND") {
+					componentToggle[3] = true;
+				}
+				if (_Scene->getGameObjects()->at(sceneIndex).getComponents().at(i)->m_ComponentName == "DIRECTIONAL_LIGHT") {
+					componentToggle[4] = true;
+				}
+				if (_Scene->getGameObjects()->at(sceneIndex).getComponents().at(i)->m_ComponentName == "POINT_LIGHT") {
+					componentToggle[5] = true;
+				}
+				if (_Scene->getGameObjects()->at(sceneIndex).getComponents().at(i)->m_ComponentName == "SPOT_LIGHT") {
+					componentToggle[6] = true;
+				}
+				if (_Scene->getGameObjects()->at(sceneIndex).getComponents().at(i)->m_ComponentName == "BOX_COLLIDER") {
+					componentToggle[7] = true;
+				}
+				if (_Scene->getGameObjects()->at(sceneIndex).getComponents().at(i)->m_ComponentName == "RIGID_BODY") {
+					componentToggle[8] = true;
+				}
+			
+		}*/
 
 		//Component
 		if (ImGui::TreeNode("Add Component"))
 		{
 			ImGui::Columns(3, NULL, false);
-			std::string Components[] = { "Transform", "Camera", "Audio", "Directional Light", "Point Lights", "templateComponents2", "templateComponents3", "templateComponents4", "templateComponents5" };
+			std::string Components[] = { "Transform","Render Component", "First Person Camera", "Audio", "Directional Light", "Point Light", "SpotLight", "Box Collider", "Rigid Body" };
+
 			for (int i = 0; i < 9; i++)
 			{
 				if (ImGui::Selectable(Components[i].c_str(), componentToggle[i]))
@@ -557,16 +653,32 @@ while (!glfwWindowShouldClose(window))
 			ImGui::Columns(1);
 			ImGui::TreePop();
 		}
+
+		
+
+		TransformComponent * transformComponent;
+		RenderComponent * renderComponent;
+		FirstPersonCameraComponent * firstPersonCameraComponent;
+		DirectionalLight * directionalLight;
+		PointLight * pointLight;
+
 		if (componentToggle[0] == true)
 		{
+
+			if (_Scene->getGameObjects()->at(sceneIndex).CheckComponentTypeExists<TransformComponent>()) {
+				transformComponent = _Scene->getGameObjects()->at(sceneIndex).GetComponentByType<TransformComponent>();
+			}
+			else {
+				transformComponent = new TransformComponent(&_Scene->getGameObjects()->at(sceneIndex));
+			}
 			if (ImGui::TreeNode("Transform"))
 			{
 				ImGui::InputFloat3("Position", vec3mPos);
-				tc->setPosition(glm::vec3(vec3mPos[0], vec3mPos[1], vec3mPos[2]));
+			//	transformComponent->setPosition(glm::vec3(vec3mPos[0], vec3mPos[1], vec3mPos[2]));
 				ImGui::InputFloat3("Rotation", vec3mRot);
-				tc->setRotation(glm::vec3(vec3mRot[0], vec3mRot[1], vec3mRot[2]));
+			//	transformComponent->setRotation(glm::vec3(vec3mRot[0], vec3mRot[1], vec3mRot[2]));
 				ImGui::InputFloat3("Scale", vec3mSize);
-				tc->setScale(glm::vec3(vec3mSize[0], vec3mSize[1], vec3mSize[2]));
+			//	transformComponent->setScale(glm::vec3(vec3mSize[0], vec3mSize[1], vec3mSize[2]));
 				ImGui::TreePop();
 			}
 		}
@@ -611,6 +723,41 @@ while (!glfwWindowShouldClose(window))
 				//ImGui::SliderFloat("Quadratic", Quadratic);
 				ImGui::TreePop();
 			}
+		}
+		
+		/*for (int i = _Scene->getGameObjects()->at(sceneIndex).getComponents().size(); i--> 0;) {
+			_Scene->getGameObjects()->at(sceneIndex).removeComponent(_Scene->getGameObjects()->at(sceneIndex).getComponents().at(i));
+		}
+*/
+		for (int i = 0; i < 9; i++) {
+			if (componentToggle[0] == true) {
+
+			}
+			if (componentToggle[1] = true) {
+
+			}
+			if (componentToggle[2] = true) {
+
+			}
+			if (componentToggle[3] = true) {
+
+			}
+			if (componentToggle[4] = true) {
+
+			}
+			if (componentToggle[5] = true) {
+
+			}
+			if (componentToggle[6] = true) {
+
+			}
+			if (componentToggle[7] = true) {
+
+			}
+			if (componentToggle[8] = true) {
+
+			}
+			
 		}
 
 		//Component script

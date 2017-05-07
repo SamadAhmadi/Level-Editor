@@ -56,12 +56,17 @@ public:
 	//Attach a mesh to the render component to be rendered. Rendering occurs in the order they are attached.
 	void AttachMesh(Mesh* pMesh);
 
-	void AttachModel(Model pModel) {
+	int AttachModel(Model pModel) {
 		m_Models_.push_back(pModel);
+		return m_Models_.size() - 1;
+	}
+
+	void RemoveModel(int position) {
+		m_Models_.erase(m_Models_.begin() + position);
 	}
 
 	//Render function.
-	void Render(glm::mat4 pProj, glm::mat4 pView);
+	void Render(glm::mat4 pProj, glm::mat4 pView, std::string pShader = "");
 
 	void toggleDrawing(bool pToggle) {
 		shouldDraw = pToggle;
@@ -82,10 +87,17 @@ public:
 	std::vector<Model>& getModels() {
 		return m_Models_;
 	}
+
+	static void registerLua(lua_State* L)
+	{
+		using namespace luabridge;
+
+		getGlobalNamespace(L)
+			.deriveClass<RenderComponent, Component>("RenderComponent")
+			.addConstructor<void(*)(GameObject*, std::string, int)>()
+			.addFunction("toggleDrawing", &RenderComponent::toggleDrawing)
+			.endClass();
+	}
 };
-
-
-
-
 
 #endif 

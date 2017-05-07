@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "GameObject.h"
-#include "GameObjectVectorWrapper.h"
 #include "ComponentVectorWrapper.h"
 #include "Rendering\Components\CameraComponent.h"
 #include "Scripting\LuaHelper.h"
@@ -24,7 +23,7 @@ public:
 
 	//Add a game object to the scene.
 	int AddGameObject(GameObject pGameObject);
-	void RemoveGameObject(GameObject * pGameObject);
+	void RemoveGameObject(std::string pName);
 
 	//Update the scene's contents.
 	void Update(double dt);
@@ -39,9 +38,11 @@ public:
 		return m_Name_;
 	}
 
+	luabridge::LuaRef luaGetGameObject(std::string name);
+
 	luabridge::LuaRef luaGetGameObjects();
 
-	GameObjectVectorWrapper::t_GameObject_Vector_ * getGameObjects() {
+	std::vector<GameObject> * getGameObjects() {
 		return &m_SceneGameObjects_;
 	}
 	bool M_bIsDirty = true;
@@ -71,7 +72,10 @@ public:
 			.addFunction("attachMainCamera", &Scene::attachMainCameraComponent)
 			.addFunction("addGameObject", &Scene::AddGameObject)
 			.addFunction("removeGameObject", &Scene::RemoveGameObject)
+			.addFunction("getGameObject", &Scene::luaGetGameObject)
 			.addFunction("getGameObjects", &Scene::luaGetGameObjects)
+			.addFunction("togglePostProcess", &Scene::togglePostProcess)
+			.addProperty("postProcessEnabled", &Scene::shouldPostProcess)
 			.endClass();
 	}
 
@@ -79,21 +83,27 @@ public:
 		return m_Environment_;
 	}
 
+	void togglePostProcess(int pToggle) {
+		m_ShouldPostProcess_ = pToggle;
+	}
+
+	int shouldPostProcess() const {
+		return m_ShouldPostProcess_;
+	}
+
 private:
 
 	GameObject m_RootNode_ = GameObject("Root");
 	
-	GameObjectVectorWrapper::t_GameObject_Vector_ m_SceneGameObjects_;
-	
+	std::vector<GameObject> m_SceneGameObjects_;
 
 	CameraComponent * m_CurrentCamera_ = nullptr;
-
 
 	std::string m_Name_;
 
 	Environment * m_Environment_;
 
-
+	int m_ShouldPostProcess_ = false;
 
 };
 

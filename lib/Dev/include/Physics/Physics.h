@@ -10,7 +10,6 @@
 #include "glm\gtc\type_ptr.hpp"
 
 #include "General\Scene.h"
-#include "General\GameObjectVectorWrapper.h"
 
 #include "Physics\Components\BoxCollider.h"
 #include "Physics\Components\RigidBody.h"
@@ -27,12 +26,12 @@ private:
 	Scene * m_CurrentScene_ = nullptr;
 
 	//Vector of all game objects with a render component.
-	GameObjectVectorWrapper::t_GameObject_Vector_ m_sceneGameObjectsCollide_;
-	GameObjectVectorWrapper::t_GameObject_Vector_ m_sceneGameObjectsMove_;
+	std::vector<GameObject> m_sceneGameObjectsCollide_;
+	std::vector<GameObject> m_sceneGameObjectsMove_;
 	GLFWwindow * m_Window_;
-	
-	float gravity = 9.8f;
-	float friction = 0.8f;
+
+	float gravity = 100.0f;
+	float friction = 10.3f;
 
 public:
 	Physics() {
@@ -45,13 +44,14 @@ public:
 
 	void Stop(GameObject go);
 
-	void CollisionDetection();
+	void CollisionDetection(float dt);
+
 
 	void EulerMove(float dt);
 
 	bool AABBAABBCollision(BoxCollider * boxC1, BoxCollider * boxC2);
 	
-	void ResolveCollision(GameObject& go,CollisionData cd);
+	void ResolveCollision(GameObject& go,CollisionData * cd);
 
 	void setScene(Scene * pScene);
 

@@ -2,6 +2,8 @@
 #define _FIRST_PERSON_CAMERA_COMPONENT_H_
 
 #include "CameraComponent.h"
+#include "Rendering\ShaderUniform.h"
+
 
 class FirstPersonCameraComponent : public CameraComponent {
 private:
@@ -21,12 +23,13 @@ private:
 	// Initial Field of View
 	float m_fInitialFoV_ = 45.0f;
 
-	float m_fSpeed_ = 0.003f; // 3 units / second
-	float m_fMouseSpeed_ = 0.001f;
+	float m_fSpeed_ = 0.03f; // 3 units / second
+	float m_fMouseSpeed_ = 0.05f;
 
 	//Up Vector.
 	glm::vec3 m_Up_;
 
+	ShaderUniform camera;
 
 	//View Matrix created by the bind function.
 	glm::mat4 m_View_;
@@ -44,6 +47,13 @@ public:
 	//The horizontal angle for the camera.
 	float m_fHorizontalAngle_;
 
+	void setPosition(glm::vec3 pPos) {
+		m_Position_ = pPos;
+	}
+
+	glm::vec3 getPosition() {
+		return m_Position_;
+	}
 
 	virtual glm::mat4 Bind();
 

@@ -10,7 +10,6 @@
 #include "glm\gtc\type_ptr.hpp"
 
 #include "General\Scene.h"
-#include "General\GameObjectVectorWrapper.h"
 
 #include "Rendering\LightManager.h"
 
@@ -24,9 +23,20 @@ private:
 	Scene * m_CurrentScene_ = nullptr;
 
 	//Vector of all game objects with a render component.
-	GameObjectVectorWrapper::t_GameObject_Vector_ m_sceneGameObjects_;
+	std::vector<GameObject> m_sceneGameObjects_;
 	GLFWwindow * m_Window_;
 	LightManager m_LightManager_;
+
+	GLuint m_FBO_, m_fbo_texture_, m_rbo_depth_;
+
+	static void window_size_callback(GLFWwindow* window, int width, int height);
+	static bool hasResized;
+
+	GLuint quadVAO;
+
+	int screen_width, screen_height;
+
+
 
 public:
 	Renderer() {
