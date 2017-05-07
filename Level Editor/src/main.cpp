@@ -188,7 +188,6 @@ int main(int, char**)
 	//tc->setPosition(glm::vec3(0.0f, 0.0f, 0.0f));
 	//tc->setRotation(glm::vec3(-3.142 / 2.0f, 0.0f, 0.0f));
 	//tc->setScale(glm::vec3(2.0f, 2.0f, 2.0f));
-
 	RenderComponent * render = new RenderComponent(&_Scene->getGameObjects()->at(index), "default");
 
 	AssimpLoader loader;
@@ -350,6 +349,10 @@ while (!glfwWindowShouldClose(window))
 		if (ImGui::TreeNode("Models"))
 		{
 			ImGui::Combo("Model List", &item, cItem, ModelscomboStrings.size());
+			if (ImGui::Button("Load Model"))
+			{
+				Model model = loader.LoadModel("");
+			};
 			ImGui::TreePop();
 		}
 		//list of models in scene
